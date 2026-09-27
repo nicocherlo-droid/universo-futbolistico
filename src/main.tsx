@@ -1,25 +1,35 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import "./styles.css";
+import React,{useMemo,useState}from"react";
+import{createRoot}from"react-dom/client";
+import"./styles.css";
+import type{AppState,Club,Division,Region}from"./types";
+import{createId,createUniverse,loadState,saveState}from"./storage";
 
+type View="home"|"create"|"dashboard"|"clubs"|"regions"|"divisions";
 function App(){
-  return (
-    <main className="app-shell">
-      <section className="hero">
-        <div className="badge">⚽ UNIVERSO FUTBOLÍSTICO</div>
-        <h1>Tu universo.<br/><span>Tu historia.</span></h1>
-        <p>Construí las reglas, creá los clubes y dejá que el fútbol escriba su propia historia.</p>
-        <div className="actions">
-          <button className="primary">Crear nuevo universo</button>
-          <button className="secondary">Cargar universo</button>
-        </div>
-      </section>
-      <section className="features">
-        <article><b>🎲</b><h2>Azar</h2><p>Resultados generados partido a partido.</p></article>
-        <article><b>🏆</b><h2>Historia</h2><p>Temporadas, campeones, ascensos y palmarés.</p></article>
-        <article><b>🌎</b><h2>Universos</h2><p>Regiones, divisiones y competiciones configurables.</p></article>
-      </section>
-    </main>
-  );
+ const[state,setState]=useState<AppState>(()=>loadState()); const[view,setView]=useState<View>("home");
+ const[name,setName]=useState("Fútbol Argentino"); const[year,setYear]=useState(new Date().getFullYear());
+ const active=useMemo(()=>state.universes.find(u=>u.id===state.activeUniverseId),[state]);
+ function persist(next:AppState){setState(next);saveState(next)}
+ function openUniverse(){if(active)setView("dashboard")}
+ function create(){const u=createUniverse(name.trim()||"Mi universo",year);const next={...state,universes:[...state.universes,u],activeUniverseId:u.id};persist(next);setView("dashboard")}
+ function updateActive(fn:(u:NonNullable<typeof active>)=>NonNullable<typeof active>){if(!active)return;const u=fn(active);persist({...state,universes:state.universes.map(x=>x.id===u.id?u:x)})}
+ function addRegion(n:string){if(!n.trim())return;updateActive(u=>({...u,regions:[...u.regions,{id:createId("region"),name:n.trim()}]}))}
+ function addClub(c:Club){updateActive(u=>({...u,clubs:[...u.clubs,c]}))}
+ function addDivision(d:Division){updateActive(u=>({...u,divisions:[...u.divisions,d]}))}
+ if(view==="create")return <main className="shell"><div className="panel form"><button className="back" onClick={()=>setView("home")}>← Volver</button><div className="badge">NUEVO UNIVERSO</div><h1>Construí tu<br/><span>mundo futbolístico.</span></h1><label>Nombre<input value={name} onChange={e=>setName(e.target.value)}/></label><label>Primera temporada<input type="number" value={year} onChange={e=>setYear(Number(e.target.value))}/></label><button className="primary wide" onClick={create}>Crear universo</button></div></main>;
+ if(!active)return <Home state={state} setView={setView} openUniverse={openUniverse}/>;
+ if(view==="clubs")return <Clubs active={active} addClub={addClub} setView={setView}/>;
+ if(view==="regions")return <Regions active={active} addRegion={addRegion} setView={setView}/>;
+ if(view==="divisions")return <Divisions active={active} addDivision={addDivision} setView={setView}/>;
+ if(view==="dashboard")return <Dashboard active={active} setView={setView}/>;
+ return <Home state={state} setView={setView} openUniverse={openUniverse}/>;
 }
+function Home({state,setView,openUniverse}:{state:AppState;setView:(v:View)=>void;openUniverse:()=>void}){return <main className="shell home"><section className="hero"><div className="badge">⚽ UNIVERSO FUTBOLÍSTICO</div><h1>Tu universo.<br/><span>Tu historia.</span></h1><p>Construí las reglas, creá los clubes y dejá que el fútbol escriba su propia historia.</p><div className="actions"><button className="primary" onClick={()=>setView("create")}>Crear nuevo universo</button>{state.universes.length>0&&<button className="secondary" onClick={openUniverse}>Continuar universo</button>}</div></section><section className="features"><article>🎲<h2>Azar</h2><p>Resultados partido a partido.</p></article><article>🏆<h2>Historia</h2><p>Temporadas, campeones y palmarés.</p></article><article>🌎<h2>Universos</h2><p>Regiones, divisiones y competiciones.</p></article></section></main>}
+function Nav({active,setView}:{active:any;setView:(v:View)=>void}){return <><header className="top"><div><div className="badge">UNIVERSO ACTIVO</div><h2>{active.name}</h2></div><button className="secondary" onClick={()=>setView("home")}>Inicio</button></header><nav className="nav">{(["dashboard","clubs","regions","divisions"] as View[]).map(v=><button key={v} className={v==="dashboard"?"selected":""} onClick={()=>setView(v)}>{v==="dashboard"?"Resumen":v==="clubs"?"Clubes":v==="regions"?"Regiones":"Divisiones"}</button>)}</nav></>}
+function Dashboard({active,setView}:{active:any;setView:(v:View)=>void}){return <main className="shell"><Nav active={active} setView={setView}/><section className="grid"><Stat t="Temporada" v={active.currentSeason}/><Stat t="Clubes" v={active.clubs.length}/><Stat t="Regiones" v={active.regions.length}/><Stat t="Divisiones" v={active.divisions.length}/></section><section className="panel"><div className="eyebrow">ESTADO DEL UNIVERSO</div><h3>Todo listo para construir la primera temporada.</h3><p className="muted">Primero definimos geografía, clubes y estructura. Después entra el motor de competiciones.</p></section></main>}
+function Stat({t,v}:{t:string;v:any}){return <article className="stat"><span>{t}</span><strong>{v}</strong></article>}
+function Regions({active,addRegion,setView}:{active:any;addRegion:(n:string)=>void;setView:(v:View)=>void}){const[n,setN]=useState("");return <main className="shell"><Nav active={active} setView={setView}/><section className="panel"><div className="section-head"><div><div className="eyebrow">GEOGRAFÍA</div><h3>Regiones</h3></div></div><div className="inline"><input value={n} onChange={e=>setN(e.target.value)} placeholder="Ej. Buenos Aires"/><button className="primary" onClick={()=>{addRegion(n);setN("")}}>Agregar</button></div><List empty="Todavía no hay regiones." items={active.regions.map((r:Region)=>r.name)}/></section></main>}
+function Clubs({active,addClub,setView}:{active:any;addClub:(c:Club)=>void;setView:(v:View)=>void}){const[n,setN]=useState("");const[c,setC]=useState("");const[p,setP]=useState("");const[s,setS]=useState(10000);return <main className="shell"><Nav active={active} setView={setView}/><section className="panel"><div className="eyebrow">IDENTIDAD</div><h3>Crear club</h3><div className="form-grid"><input placeholder="Nombre del club" value={n} onChange={e=>setN(e.target.value)}/><input placeholder="Ciudad" value={c} onChange={e=>setC(e.target.value)}/><input placeholder="Provincia" value={p} onChange={e=>setP(e.target.value)}/><input type="number" min="100" placeholder="Capacidad" value={s} onChange={e=>setS(Number(e.target.value))}/></div><button className="primary" onClick={()=>{if(!n.trim())return;addClub({id:createId("club"),name:n.trim(),city:c.trim(),province:p.trim(),regionId:"",foundedYear:new Date().getFullYear(),stadiumName:"Estadio municipal",stadiumCapacity:s});setN("");setC("");setP("")}}>Crear club</button></section><section className="panel"><h3>Clubes creados</h3><List empty="Todavía no hay clubes." items={active.clubs.map((x:Club)=>`${x.name} · ${x.city||"sin ciudad"} · ${x.stadiumCapacity.toLocaleString("es-AR")} espectadores`)}/></section></main>}
+function Divisions({active,addDivision,setView}:{active:any;addDivision:(d:Division)=>void;setView:(v:View)=>void}){const[n,setN]=useState("");const[level,setL]=useState(active.divisions.length+1);return <main className="shell"><Nav active={active} setView={setView}/><section className="panel"><div className="eyebrow">ESTRUCTURA</div><h3>Crear división</h3><div className="inline"><input placeholder="Ej. Primera División" value={n} onChange={e=>setN(e.target.value)}/><input className="small" type="number" min="1" value={level} onChange={e=>setL(Number(e.target.value))}/><button className="primary" onClick={()=>{if(!n.trim())return;addDivision({id:createId("division"),name:n.trim(),level,teamIds:[],promotionSlots:2,relegationSlots:2});setN("");setL(active.divisions.length+2)}}>Agregar</button></div></section><section className="panel"><h3>Divisiones</h3><List empty="Todavía no hay divisiones." items={active.divisions.map((d:Division)=>`Nivel ${d.level} · ${d.name} · ${d.teamIds.length} clubes`)}/></section></main>}
+function List({items,empty}:{items:string[];empty:string}){return items.length?<div className="list">{items.map((x,i)=><div key={i}>{x}</div>)}</div>:<p className="muted">{empty}</p>}
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>);
