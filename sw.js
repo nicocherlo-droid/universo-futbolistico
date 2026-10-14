@@ -1,4 +1,4 @@
-const CACHE = "universo-futbolistico-v3-7-0";
+const CACHE = "universo-futbolistico-mobile-v4-2-1";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
